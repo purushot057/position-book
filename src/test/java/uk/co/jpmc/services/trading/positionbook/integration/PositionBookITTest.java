@@ -1,7 +1,7 @@
 package uk.co.jpmc.services.trading.positionbook.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static uk.co.jpmc.services.trading.positionbook.utilities.TestHelper.createTradeEventsValidJson;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.tradeEventsValidJson;
 
 import com.jayway.jsonpath.JsonPath;
 import java.net.URI;
@@ -19,6 +19,7 @@ import uk.co.jpmc.services.trading.positionbook.filter.RequestIdFilter;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "server.servlet.context-path=/position-book/v1")
+@SuppressWarnings("PMD.UnitTestContainsTooManyAsserts")
 class PositionBookITTest {
 
     private static final String CONTEXT_PATH = "/position-book/v1";
@@ -28,6 +29,8 @@ class PositionBookITTest {
     private static final String SECURITY_ID = "SEC1";
     private static final String REQUEST_ID = UUID.randomUUID().toString();
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final String ACCEPT_HEADER = "Accept";
+    private static final String CONTENT_TYPE_HEADER = "Content-Type";
 
     @LocalServerPort private int port;
 
@@ -35,10 +38,10 @@ class PositionBookITTest {
     void shouldAcceptTradeEventBatch() throws Exception {
         final HttpRequest request =
                 HttpRequest.newBuilder(uri(PROCESS_TRADE_EVENT_BATCH_URI))
-                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                        .header("Accept", MediaType.APPLICATION_JSON_VALUE)
+                        .header(CONTENT_TYPE_HEADER, MediaType.APPLICATION_JSON_VALUE)
+                        .header(ACCEPT_HEADER, MediaType.APPLICATION_JSON_VALUE)
                         .header(RequestIdFilter.HEADER_NAME, REQUEST_ID)
-                        .POST(HttpRequest.BodyPublishers.ofString(createTradeEventsValidJson()))
+                        .POST(HttpRequest.BodyPublishers.ofString(tradeEventsValidJson()))
                         .build();
 
         final HttpResponse<String> response = send(request);
@@ -59,21 +62,20 @@ class PositionBookITTest {
                                                 + ACCOUNT_ID
                                                 + "&securityId="
                                                 + SECURITY_ID))
-                        .header("Accept", MediaType.APPLICATION_JSON_VALUE)
+                        .header(ACCEPT_HEADER, MediaType.APPLICATION_JSON_VALUE)
                         .GET()
                         .build();
 
         final HttpResponse<String> response = send(request);
         final var json = JsonPath.parse(response.body());
 
+        final String requestId =
+                response.headers().firstValue(RequestIdFilter.HEADER_NAME).orElseThrow();
+
         assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
         assertThat(json.read("$.accountId", String.class)).isEqualTo(ACCOUNT_ID);
         assertThat(json.read("$.securityId", String.class)).isEqualTo(SECURITY_ID);
         assertThat(json.read("$.quantity", Long.class)).isEqualTo(150L);
-
-        final String requestId =
-                response.headers().firstValue(RequestIdFilter.HEADER_NAME).orElseThrow();
-
         assertThat(requestId).isNotBlank();
     }
 
@@ -81,7 +83,7 @@ class PositionBookITTest {
     void shouldReturnBadRequestWhenQueryParamIsMissing() throws Exception {
         final HttpRequest request =
                 HttpRequest.newBuilder(uri(RETRIEVE_POSITION_URI + "?accountId=" + ACCOUNT_ID))
-                        .header("Accept", MediaType.APPLICATION_JSON_VALUE)
+                        .header(ACCEPT_HEADER, MediaType.APPLICATION_JSON_VALUE)
                         .header(RequestIdFilter.HEADER_NAME, REQUEST_ID)
                         .GET()
                         .build();
@@ -99,18 +101,17 @@ class PositionBookITTest {
     void shouldReturnBadRequestWhenTradeEventRequestBodyIsMalformed() throws Exception {
         final HttpRequest request =
                 HttpRequest.newBuilder(uri(PROCESS_TRADE_EVENT_BATCH_URI))
-                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                        .header("Accept", MediaType.APPLICATION_JSON_VALUE)
+                        .header(CONTENT_TYPE_HEADER, MediaType.APPLICATION_JSON_VALUE)
+                        .header(ACCEPT_HEADER, MediaType.APPLICATION_JSON_VALUE)
                         .header(RequestIdFilter.HEADER_NAME, REQUEST_ID)
                         .POST(HttpRequest.BodyPublishers.ofString("[{\"id\": 1"))
                         .build();
 
         final HttpResponse<String> response = send(request);
 
-        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-
         final var json = JsonPath.parse(response.body());
 
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(json.read("$.code", String.class)).isEqualTo("INVALID_REQUEST_BODY");
         assertThat(json.read("$.message", String.class)).isNotBlank();
         assertThat(json.read("$.id", String.class)).isEqualTo(REQUEST_ID);

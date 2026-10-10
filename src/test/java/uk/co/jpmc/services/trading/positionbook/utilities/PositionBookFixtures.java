@@ -3,9 +3,9 @@ package uk.co.jpmc.services.trading.positionbook.utilities;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
-public final class TestHelper {
+public final class PositionBookFixtures {
 
-    public static String createTradeEventsValidJson() {
+    public static String tradeEventsValidJson() {
         return """
                 [
                   {
