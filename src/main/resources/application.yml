@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: position-book
+
+server:
+  port: 8081
