@@ -1,6 +1,6 @@
 package uk.co.jpmc.services.trading.positionbook.web;
 
-
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -9,9 +9,6 @@ import org.springframework.web.bind.annotation.RestController;
 import uk.co.jpmc.services.trading.positionbook.web.dto.PositionResponse;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeBatchResponse;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeEventRequest;
-
-import java.util.List;
-
 
 @RestController
 public class PositionBookController {
@@ -22,8 +19,7 @@ public class PositionBookController {
     private static final String SECURITY_ID_QUERY_PARAM = "securityId";
 
     @PostMapping(TRADE_EVENTS_PATH)
-    public TradeBatchResponse processTradeEvents(
-            @RequestBody List<TradeEventRequest> events) {
+    public TradeBatchResponse processTradeEvents(@RequestBody List<TradeEventRequest> events) {
 
         return new TradeBatchResponse(events.size());
     }

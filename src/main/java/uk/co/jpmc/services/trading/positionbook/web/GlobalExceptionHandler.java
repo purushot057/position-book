@@ -1,5 +1,6 @@
 package uk.co.jpmc.services.trading.positionbook.web;
 
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
@@ -15,8 +16,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import uk.co.jpmc.services.trading.positionbook.filter.RequestIdFilter;
 import uk.co.jpmc.services.trading.positionbook.web.dto.ApiErrorResponse;
-
-import java.util.UUID;
 
 @RestControllerAdvice
 @Slf4j
@@ -42,8 +41,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             final Object body,
             final HttpHeaders headers,
             final HttpStatusCode status,
-            final WebRequest request
-    ) {
+            final WebRequest request) {
         final String code;
         final String message;
 
@@ -62,37 +60,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         } else {
             final HttpStatus httpStatus = HttpStatus.resolve(status.value());
             code = httpStatus != null ? httpStatus.name() : REQUEST_FAILED_CODE;
-            message = httpStatus != null
-                    ? httpStatus.getReasonPhrase()
-                    : REQUEST_FAILED_MESSAGE;
+            message = httpStatus != null ? httpStatus.getReasonPhrase() : REQUEST_FAILED_MESSAGE;
         }
 
         final ApiErrorResponse error = createError(code, message, exception, status);
 
-        return super.handleExceptionInternal(
-                exception, error, headers, status, request
-        );
+        return super.handleExceptionInternal(exception, error, headers, status, request);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpectedException(final Exception exception) {
-        final ApiErrorResponse error = createError(
-                INTERNAL_SERVER_ERROR_CODE,
-                INTERNAL_SERVER_ERROR_MESSAGE,
-                exception,
-                HttpStatus.INTERNAL_SERVER_ERROR
-        );
+        final ApiErrorResponse error =
+                createError(
+                        INTERNAL_SERVER_ERROR_CODE,
+                        INTERNAL_SERVER_ERROR_MESSAGE,
+                        exception,
+                        HttpStatus.INTERNAL_SERVER_ERROR);
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 
     private ApiErrorResponse createError(
             final String code,
             final String message,
             final Exception exception,
-            final HttpStatusCode status
-    ) {
+            final HttpStatusCode status) {
         String id = MDC.get(RequestIdFilter.MDC_KEY);
 
         if (id == null) {
