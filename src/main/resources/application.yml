@@ -3,4 +3,13 @@ spring:
     name: position-book
 
 server:
+  servlet:
+    context-path: /position-book/v1
   port: 8081
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    uk.co.jpmc.services.positionbook: DEBUG
