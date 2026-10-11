@@ -1,0 +1,16 @@
+{
+  "processed": 2,
+  "rejected": 0,
+  "results": [
+    {
+      "index": 0,
+      "eventId": 1,
+      "eventStatus": "PROCESSED"
+    },
+    {
+      "index": 1,
+      "eventId": 2,
+      "eventStatus": "PROCESSED"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "processed": 1,
+  "rejected": 1,
+  "results": [
+    {
+      "index": 0,
+      "eventId": 1,
+      "eventStatus": "REJECTED",
+      "errors": [
+        {
+          "field": "accountId",
+          "code": "INVALID_ACCOUNT_ID",
+          "message": "Account ID must contain 1–64 letters or numbers"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "eventId": 2,
+      "eventStatus": "PROCESSED"
+    }
+  ]
+}

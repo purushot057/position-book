@@ -1,0 +1,5 @@
+{
+  "code": "POSITION_NOT_FOUND",
+  "id": "test-request-123",
+  "message": "No position exists for the specified account and security."
+}
