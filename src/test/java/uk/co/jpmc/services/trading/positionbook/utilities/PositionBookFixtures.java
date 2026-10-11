@@ -9,14 +9,14 @@ public final class PositionBookFixtures {
         return """
                 [
                   {
-                    "eventId": 1,
+                    "id": 1,
                     "action": "BUY",
                     "accountId": "ACC1",
                     "securityId": "SEC1",
                     "quantity": 100
                   },
                   {
-                    "eventId": 2,
+                    "id": 2,
                     "action": "BUY",
                     "accountId": "ACC1",
                     "securityId": "SEC1",

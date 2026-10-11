@@ -13,3 +13,7 @@ logging:
       console: ecs
   level:
     uk.co.jpmc.services.positionbook: DEBUG
+
+
+position-book:
+  max-events-per-request: 100

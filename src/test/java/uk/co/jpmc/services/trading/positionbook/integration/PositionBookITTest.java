@@ -48,7 +48,13 @@ class PositionBookITTest {
         final var json = JsonPath.parse(response.body());
 
         assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-        assertThat(json.read("$.received", Integer.class)).isEqualTo(2);
+        assertThat(json.read("$.processed", Integer.class)).isEqualTo(2);
+        assertThat(json.read("$.rejected", Integer.class)).isZero();
+        assertThat(json.read("$.results.length()", Integer.class)).isEqualTo(2);
+        assertThat(json.read("$.results[0].eventId", Integer.class)).isEqualTo(1);
+        assertThat(json.read("$.results[0].eventStatus", String.class)).isEqualTo("PROCESSED");
+        assertThat(json.read("$.results[1].eventId", Integer.class)).isEqualTo(2);
+        assertThat(json.read("$.results[1].eventStatus", String.class)).isEqualTo("PROCESSED");
         assertThat(response.headers().firstValue(RequestIdFilter.HEADER_NAME)).contains(REQUEST_ID);
     }
 

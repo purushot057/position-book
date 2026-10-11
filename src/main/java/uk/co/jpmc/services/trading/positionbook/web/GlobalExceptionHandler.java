@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import uk.co.jpmc.services.trading.positionbook.exception.BatchLimitExceededException;
+import uk.co.jpmc.services.trading.positionbook.exception.EmptyBatchException;
 import uk.co.jpmc.services.trading.positionbook.filter.RequestIdFilter;
 import uk.co.jpmc.services.trading.positionbook.web.dto.ApiErrorResponse;
 
@@ -66,6 +68,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         final ApiErrorResponse error = createError(code, message, exception, status);
 
         return super.handleExceptionInternal(exception, error, headers, status, request);
+    }
+
+    @ExceptionHandler(BatchLimitExceededException.class)
+    public ResponseEntity<Object> handleBatchLimitExceeded(BatchLimitExceededException exception) {
+        final ApiErrorResponse error =
+                createError(
+                        "BATCH_LIMIT_EXCEEDED",
+                        exception.getMessage(),
+                        exception,
+                        HttpStatus.BAD_REQUEST);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(EmptyBatchException.class)
+    public ResponseEntity<Object> handleEmptyBatch(EmptyBatchException exception) {
+        final ApiErrorResponse error =
+                createError(
+                        "EMPTY_BATCH", exception.getMessage(), exception, HttpStatus.BAD_REQUEST);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
     @ExceptionHandler(Exception.class)
