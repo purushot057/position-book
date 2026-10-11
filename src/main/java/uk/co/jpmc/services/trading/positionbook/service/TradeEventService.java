@@ -11,24 +11,38 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uk.co.jpmc.services.trading.positionbook.exception.BatchLimitExceededException;
 import uk.co.jpmc.services.trading.positionbook.exception.EmptyBatchException;
+import uk.co.jpmc.services.trading.positionbook.exception.EventRejectedException;
+import uk.co.jpmc.services.trading.positionbook.exception.PositionNotFoundException;
+import uk.co.jpmc.services.trading.positionbook.model.Position;
+import uk.co.jpmc.services.trading.positionbook.model.TradeEvent;
+import uk.co.jpmc.services.trading.positionbook.persistence.InMemoryPositionBook;
+import uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants;
 import uk.co.jpmc.services.trading.positionbook.web.dto.EventValidationError;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeBatchResponse;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeEventRequest;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeEventResult;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeEventStatus;
+import uk.co.jpmc.services.trading.positionbook.web.dto.TradePositionResponse;
 
 @Service
 @Slf4j
 public class TradeEventService {
 
     private static final int MIN_EVENTS_PER_REQUEST = 1;
+    private static final String EMPTY_BATCH_MESSAGE = "At least one trade event is required";
+    private static final String POSITION_NOT_FOUND_MESSAGE =
+            "No position exists for the specified account and security";
+    private static final String BATCH_LIMIT_EXCEEDED_MESSAGE_FORMAT =
+            "A request must contain no more than %d events";
 
     private final Validator validator;
     private final int maxEventsPerRequest;
+    private final InMemoryPositionBook positionBook;
 
     public TradeEventService(
             Validator validator,
-            @Value("${position-book.max-events-per-request:100}") int maxEventsPerRequest) {
+            @Value("${position-book.max-events-per-request:100}") int maxEventsPerRequest,
+            InMemoryPositionBook positionBook) {
 
         if (maxEventsPerRequest < MIN_EVENTS_PER_REQUEST) {
             throw new IllegalArgumentException("Maximum events per request must be positive");
@@ -36,17 +50,19 @@ public class TradeEventService {
 
         this.validator = validator;
         this.maxEventsPerRequest = maxEventsPerRequest;
+        this.positionBook = positionBook;
     }
 
     public TradeBatchResponse processTradeEvents(List<TradeEventRequest> events) {
         // Check for empty batch before proceeding
         if (Objects.isNull(events) || events.isEmpty()) {
-            throw new EmptyBatchException();
+            throw new EmptyBatchException(EMPTY_BATCH_MESSAGE);
         }
 
         // Check before processing anything
         if (events.size() > maxEventsPerRequest) {
-            throw new BatchLimitExceededException(maxEventsPerRequest);
+            throw new BatchLimitExceededException(
+                    String.format(BATCH_LIMIT_EXCEEDED_MESSAGE_FORMAT, maxEventsPerRequest));
         }
 
         List<TradeEventResult> results = new ArrayList<>(events.size());
@@ -69,29 +85,78 @@ public class TradeEventService {
                                 errors));
 
                 log.atWarn()
-                        .addKeyValue("eventIndex", index)
-                        .addKeyValue("eventId", event == null ? null : event.eventId())
-                        .addKeyValue("errorCount", errors.size())
-                        .log("Trade event rejected");
+                        .addKeyValue(
+                                PositionBookConstants.ACCOUNT_ID_FIELD,
+                                event == null ? null : event.accountId())
+                        .addKeyValue(
+                                PositionBookConstants.SECURITY_ID_FIELD,
+                                event == null ? null : event.securityId())
+                        .log(
+                                "Trade event rejected: index={}, eventId={}, errorCount={}",
+                                index,
+                                event == null ? null : event.eventId(),
+                                errors.size());
 
                 continue;
             }
 
-            // Temporary: validation passed
-            // Apply the position update here before marking it processed.
-            processed++;
+            try {
+                // Apply the position update here before marking it processed.
+                final TradeEvent tradeEvent =
+                        new TradeEvent(
+                                event.eventId(),
+                                String.valueOf(event.action()),
+                                event.accountId(),
+                                event.securityId(),
+                                event.quantity());
 
-            results.add(
-                    new TradeEventResult(
-                            index, event.eventId(), TradeEventStatus.PROCESSED, List.of()));
+                positionBook.apply(tradeEvent);
+
+                processed++;
+                results.add(
+                        new TradeEventResult(
+                                index, event.eventId(), TradeEventStatus.PROCESSED, List.of()));
+            } catch (final EventRejectedException exception) {
+                rejected++;
+                results.add(
+                        new TradeEventResult(
+                                index,
+                                event.eventId(),
+                                TradeEventStatus.REJECTED,
+                                List.of(
+                                        new EventValidationError(
+                                                "event",
+                                                exception.getCode(),
+                                                exception.getMessage()))));
+
+                log.atWarn()
+                        .addKeyValue(PositionBookConstants.ACCOUNT_ID_FIELD, event.accountId())
+                        .addKeyValue(PositionBookConstants.SECURITY_ID_FIELD, event.securityId())
+                        .log(
+                                "Trade event rejected: index={}, eventId={}, code={}, reason={}",
+                                index,
+                                event.eventId(),
+                                exception.getCode(),
+                                exception.getMessage());
+            }
         }
 
-        log.atInfo()
-                .addKeyValue("processed", processed)
-                .addKeyValue("rejected", rejected)
-                .log("Trade event batch completed");
+        log.atInfo().log(
+                "Trade event batch completed: processed={}, rejected={}", processed, rejected);
 
         return new TradeBatchResponse(processed, rejected, List.copyOf(results));
+    }
+
+    public TradePositionResponse retrievePosition(final String accountId, final String securityId) {
+
+        final Position position =
+                positionBook
+                        .findPosition(accountId, securityId)
+                        .orElseThrow(
+                                () -> new PositionNotFoundException(POSITION_NOT_FOUND_MESSAGE));
+
+        return new TradePositionResponse(
+                position.accountId(), position.securityId(), position.quantity());
     }
 
     private List<EventValidationError> validate(final TradeEventRequest event) {
@@ -116,10 +181,10 @@ public class TradeEventService {
 
         final String code =
                 switch (field) {
-                    case "accountId" -> "INVALID_ACCOUNT_ID";
-                    case "securityId" -> "INVALID_SECURITY_ID";
+                    case PositionBookConstants.ACCOUNT_ID_FIELD -> "INVALID_ACCOUNT_ID";
+                    case PositionBookConstants.SECURITY_ID_FIELD -> "INVALID_SECURITY_ID";
                     case "eventId" -> "INVALID_EVENT_ID";
-                    case "action" -> "INVALID_ACTION";
+                    case "action" -> PositionBookConstants.INVALID_ACTION_CODE;
                     case "quantity" -> "INVALID_QUANTITY";
                     default -> "INVALID_EVENT";
                 };

@@ -1,6 +1,18 @@
 package uk.co.jpmc.services.trading.positionbook.validators;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.ACCOUNT_ID;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.BUY_ACTION;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.CANCEL_ACTION;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.QUANTITY_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.QUANTITY_NOT_POSITIVE_MESSAGE;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.QUANTITY_REQUIRED_MESSAGE;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.SECURITY_ID;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.SECURITY_ID_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.SECURITY_ID_INVALID_CHARACTERS_MESSAGE;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.SECURITY_ID_REQUIRED_MESSAGE;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.SECURITY_ID_TOO_LONG_MESSAGE;
+import static uk.co.jpmc.services.trading.positionbook.utilities.PositionBookFixtures.SELL_ACTION;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -16,14 +28,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeEventRequest;
 
 class TradeDetailsValidatorTest {
-
-    private static final String SECURITY_REQUIRED = "Security Id is required for BUY and SELL";
-    private static final String SECURITY_TOO_LONG = "Security Id must not exceed 128 characters";
-    private static final String SECURITY_INVALID_CHARACTERS =
-            "Security Id may contain only letters, numbers, hyphens, underscores and dots";
-    private static final String QUANTITY_REQUIRED = "Quantity is required for BUY and SELL";
-    private static final String QUANTITY_NOT_POSITIVE =
-            "Quantity must be greater than zero for BUY and SELL";
 
     private static ValidatorFactory validatorFactory;
     private static Validator validator;
@@ -52,7 +56,8 @@ class TradeDetailsValidatorTest {
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource("cancelCases")
     void shouldIgnoreSecurityIdAndQuantityForCancel(final ValidationCase testCase) {
-        final TradeEventRequest event = event("CANCEL", testCase.securityId(), testCase.quantity());
+        final TradeEventRequest event =
+                event(CANCEL_ACTION, testCase.securityId(), testCase.quantity());
 
         assertThat(tradeDetailsErrors(event)).isEmpty();
     }
@@ -80,7 +85,7 @@ class TradeDetailsValidatorTest {
     }
 
     private static Stream<ValidationCase> buyAndSellCases() {
-        return Stream.of("BUY", "SELL")
+        return Stream.of(BUY_ACTION, SELL_ACTION)
                 .flatMap(
                         action ->
                                 securityIdCases().stream()
@@ -103,41 +108,46 @@ class TradeDetailsValidatorTest {
                                         .map(
                                                 quantity ->
                                                         validationCase(
-                                                                "CANCEL", security, quantity)));
+                                                                CANCEL_ACTION,
+                                                                security,
+                                                                quantity)));
     }
 
     private static List<SecurityCase> securityIdCases() {
         return List.of(
-                new SecurityCase("missing", null, SECURITY_REQUIRED),
-                new SecurityCase("empty", "", SECURITY_REQUIRED),
-                new SecurityCase("spaces", "   ", SECURITY_REQUIRED),
-                new SecurityCase("tabs/newlines", "\t\n", SECURITY_REQUIRED),
+                new SecurityCase("missing", null, SECURITY_ID_REQUIRED_MESSAGE),
+                new SecurityCase("empty", "", SECURITY_ID_REQUIRED_MESSAGE),
+                new SecurityCase("spaces", "   ", SECURITY_ID_REQUIRED_MESSAGE),
+                new SecurityCase("tabs/newlines", "\t\n", SECURITY_ID_REQUIRED_MESSAGE),
                 new SecurityCase("letters", "SECXYZ", null),
                 new SecurityCase("lowercase", "secxyz", null),
                 new SecurityCase("numbers", "123", null),
-                new SecurityCase("letters/numbers", "SEC1", null),
+                new SecurityCase("letters/numbers", SECURITY_ID, null),
                 new SecurityCase("hyphen", "SEC-1", null),
                 new SecurityCase("underscore", "SEC_1", null),
                 new SecurityCase("dot", "SEC.1", null),
                 new SecurityCase("mixed punctuation", "SEC-1_X.Y", null),
                 new SecurityCase("one character", "S", null),
                 new SecurityCase("128 characters", "S".repeat(128), null),
-                new SecurityCase("129 characters", "S".repeat(129), SECURITY_TOO_LONG),
-                new SecurityCase("embedded space", "SEC 1", SECURITY_INVALID_CHARACTERS),
-                new SecurityCase("leading space", " SEC1", SECURITY_INVALID_CHARACTERS),
-                new SecurityCase("trailing space", "SEC1 ", SECURITY_INVALID_CHARACTERS),
-                new SecurityCase("at sign", "SEC@1", SECURITY_INVALID_CHARACTERS),
-                new SecurityCase("non-ASCII letter", "SÉC1", SECURITY_INVALID_CHARACTERS),
+                new SecurityCase("129 characters", "S".repeat(129), SECURITY_ID_TOO_LONG_MESSAGE),
+                new SecurityCase("embedded space", "SEC 1", SECURITY_ID_INVALID_CHARACTERS_MESSAGE),
+                new SecurityCase("leading space", " SEC1", SECURITY_ID_INVALID_CHARACTERS_MESSAGE),
+                new SecurityCase("trailing space", "SEC1 ", SECURITY_ID_INVALID_CHARACTERS_MESSAGE),
+                new SecurityCase("at sign", "SEC@1", SECURITY_ID_INVALID_CHARACTERS_MESSAGE),
                 new SecurityCase(
-                        "length takes precedence over format", "@".repeat(129), SECURITY_TOO_LONG));
+                        "non-ASCII letter", "SÉC1", SECURITY_ID_INVALID_CHARACTERS_MESSAGE),
+                new SecurityCase(
+                        "length takes precedence over format",
+                        "@".repeat(129),
+                        SECURITY_ID_TOO_LONG_MESSAGE));
     }
 
     private static List<QuantityCase> quantityCases() {
         return List.of(
-                new QuantityCase("missing", null, QUANTITY_REQUIRED),
-                new QuantityCase("minimum long", Long.MIN_VALUE, QUANTITY_NOT_POSITIVE),
-                new QuantityCase("negative", -1L, QUANTITY_NOT_POSITIVE),
-                new QuantityCase("zero", 0L, QUANTITY_NOT_POSITIVE),
+                new QuantityCase("missing", null, QUANTITY_REQUIRED_MESSAGE),
+                new QuantityCase("minimum long", Long.MIN_VALUE, QUANTITY_NOT_POSITIVE_MESSAGE),
+                new QuantityCase("negative", -1L, QUANTITY_NOT_POSITIVE_MESSAGE),
+                new QuantityCase("zero", 0L, QUANTITY_NOT_POSITIVE_MESSAGE),
                 new QuantityCase("one", 1L, null),
                 new QuantityCase("positive", 100L, null),
                 new QuantityCase("maximum long", Long.MAX_VALUE, null));
@@ -148,10 +158,10 @@ class TradeDetailsValidatorTest {
         final List<FieldError> errors = new ArrayList<>();
 
         if (security.message() != null) {
-            errors.add(new FieldError("securityId", security.message()));
+            errors.add(new FieldError(SECURITY_ID_FIELD, security.message()));
         }
         if (quantity.message() != null) {
-            errors.add(new FieldError("quantity", quantity.message()));
+            errors.add(new FieldError(QUANTITY_FIELD, quantity.message()));
         }
 
         return new ValidationCase(
@@ -179,7 +189,7 @@ class TradeDetailsValidatorTest {
 
     private static TradeEventRequest event(
             final String action, final String securityId, final Long quantity) {
-        return new TradeEventRequest(1L, action, "ACC1", securityId, quantity);
+        return new TradeEventRequest(1L, action, ACCOUNT_ID, securityId, quantity);
     }
 
     private record FieldError(String field, String message) {}

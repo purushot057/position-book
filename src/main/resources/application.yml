@@ -17,3 +17,4 @@ logging:
 
 position-book:
   max-events-per-request: 100
+  allow-negative-positions: false

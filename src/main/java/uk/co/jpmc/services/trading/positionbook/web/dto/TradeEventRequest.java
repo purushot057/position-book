@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants;
 import uk.co.jpmc.services.trading.positionbook.validators.ValidAccountId;
 import uk.co.jpmc.services.trading.positionbook.validators.ValidTradeDetails;
 
@@ -15,9 +16,11 @@ public record TradeEventRequest(
                 @JsonProperty("id")
                 Long eventId,
         @NotBlank(message = "Action is required")
-                @Pattern(regexp = "BUY|SELL|CANCEL", message = "Action must be BUY, SELL or CANCEL")
+                @Pattern(
+                        regexp = PositionBookConstants.TRADE_ACTION_PATTERN,
+                        message = PositionBookConstants.INVALID_ACTION_MESSAGE)
                 @JsonProperty("action")
                 String action,
-        @JsonProperty("accountId") @ValidAccountId String accountId,
-        @JsonProperty("securityId") String securityId,
+        @JsonProperty(PositionBookConstants.ACCOUNT_ID_FIELD) @ValidAccountId String accountId,
+        @JsonProperty(PositionBookConstants.SECURITY_ID_FIELD) String securityId,
         @JsonProperty("quantity") Long quantity) {}

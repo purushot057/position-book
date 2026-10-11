@@ -16,6 +16,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import uk.co.jpmc.services.trading.positionbook.exception.BatchLimitExceededException;
 import uk.co.jpmc.services.trading.positionbook.exception.EmptyBatchException;
+import uk.co.jpmc.services.trading.positionbook.exception.EventRejectedException;
+import uk.co.jpmc.services.trading.positionbook.exception.PositionNotFoundException;
 import uk.co.jpmc.services.trading.positionbook.filter.RequestIdFilter;
 import uk.co.jpmc.services.trading.positionbook.web.dto.ApiErrorResponse;
 
@@ -24,18 +26,21 @@ import uk.co.jpmc.services.trading.positionbook.web.dto.ApiErrorResponse;
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final String INTERNAL_SERVER_ERROR_CODE = "INTERNAL_SERVER_ERROR";
-    private static final String INTERNAL_SERVER_ERROR_MESSAGE = "An unexpected error occurred.";
+    private static final String INTERNAL_SERVER_ERROR_MESSAGE = "An unexpected error occurred";
     private static final String INVALID_REQUEST_BODY_CODE = "INVALID_REQUEST_BODY";
     private static final String INVALID_REQUEST_BODY_MESSAGE =
-            "Request body must contain valid JSON with the expected field types.";
+            "Request body must contain valid JSON with the expected field types";
     private static final String MISSING_REQUEST_PARAMETER_CODE = "MISSING_REQUEST_PARAMETER";
     private static final String MISSING_REQUEST_PARAMETER_MESSAGE =
-            "Required query parameter '%s' is missing.";
+            "Required query parameter '%s' is missing";
     private static final String INVALID_REQUEST_PARAMETER_CODE = "INVALID_REQUEST_PARAMETER";
     private static final String INVALID_REQUEST_PARAMETER_MESSAGE =
-            "Query parameter '%s' has an invalid value.";
+            "Query parameter '%s' has an invalid value";
     private static final String REQUEST_FAILED_CODE = "REQUEST_FAILED";
-    private static final String REQUEST_FAILED_MESSAGE = "The request could not be processed.";
+    private static final String REQUEST_FAILED_MESSAGE = "The request could not be processed";
+    private static final String POSITION_NOT_FOUND_CODE = "POSITION_NOT_FOUND";
+    private static final String REQUEST_REJECTED_LOG_MESSAGE_TEMPLATE =
+            "Request rejected: id={}, code={}";
 
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
@@ -71,7 +76,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler(BatchLimitExceededException.class)
-    public ResponseEntity<Object> handleBatchLimitExceeded(BatchLimitExceededException exception) {
+    public ResponseEntity<Object> handleBatchLimitExceeded(
+            final BatchLimitExceededException exception) {
         final ApiErrorResponse error =
                 createError(
                         "BATCH_LIMIT_EXCEEDED",
@@ -83,12 +89,37 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler(EmptyBatchException.class)
-    public ResponseEntity<Object> handleEmptyBatch(EmptyBatchException exception) {
+    public ResponseEntity<Object> handleEmptyBatch(final EmptyBatchException exception) {
         final ApiErrorResponse error =
                 createError(
                         "EMPTY_BATCH", exception.getMessage(), exception, HttpStatus.BAD_REQUEST);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(PositionNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handlePositionNotFound(
+            final PositionNotFoundException exception) {
+        final ApiErrorResponse error =
+                createError(
+                        POSITION_NOT_FOUND_CODE,
+                        exception.getMessage(),
+                        exception,
+                        HttpStatus.NOT_FOUND);
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    // Fallback: the service normally catches this exception per event
+    // and includes the rejection in the batch response.
+    @ExceptionHandler(EventRejectedException.class)
+    public ResponseEntity<ApiErrorResponse> handleEventRejected(
+            final EventRejectedException exception) {
+        final String code = exception.getCode();
+        final ApiErrorResponse error =
+                createError(code, exception.getMessage(), exception, HttpStatus.CONFLICT);
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
     @ExceptionHandler(Exception.class)
@@ -117,7 +148,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (status.is5xxServerError()) {
             log.error("Request failed: id={}, code={}", id, code, exception);
         } else {
-            log.debug("Request rejected: id={}, code={}", id, code);
+            log.debug(REQUEST_REJECTED_LOG_MESSAGE_TEMPLATE, id, code);
         }
 
         return new ApiErrorResponse(code, id, message);

@@ -6,7 +6,7 @@ public class EmptyBatchException extends RuntimeException {
 
     @Serial private static final long serialVersionUID = 1L;
 
-    public EmptyBatchException() {
-        super("At least one trade event is required");
+    public EmptyBatchException(final String message) {
+        super(message);
     }
 }
