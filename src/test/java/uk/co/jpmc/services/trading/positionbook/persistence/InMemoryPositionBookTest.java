@@ -48,11 +48,7 @@ class InMemoryPositionBookTest {
         positionBook = createPositionBook(false);
     }
 
-    @Test
-    void shouldReturnEmptyWhenPositionDoesNotExist() {
-        assertThat(positionBook.findPosition(ACCOUNT_ID, SECURITY_ID)).isEmpty();
-    }
-
+    // Arithmetic
     @Test
     void shouldAggregateBuyEvents() {
         positionBook.apply(event(1L, BUY_ACTION, 100L));
@@ -86,6 +82,15 @@ class InMemoryPositionBookTest {
     }
 
     @Test
+    void shouldRetainZeroPositionAfterSellingEntireHolding() {
+        positionBook.apply(event(1L, BUY_ACTION, 100L));
+        positionBook.apply(event(2L, SELL_ACTION, 100L));
+
+        assertPositionQuantity(0L);
+    }
+
+    // Cancellation
+    @Test
     void shouldCancelBuyAndProcessSubsequentTrade() {
         positionBook.apply(event(21L, BUY_ACTION, 100L));
         positionBook.apply(cancellation(21L));
@@ -117,14 +122,6 @@ class InMemoryPositionBookTest {
     }
 
     @Test
-    void shouldRetainZeroPositionAfterSellingEntireHolding() {
-        positionBook.apply(event(1L, BUY_ACTION, 100L));
-        positionBook.apply(event(2L, SELL_ACTION, 100L));
-
-        assertPositionQuantity(0L);
-    }
-
-    @Test
     void shouldRetainZeroPositionAfterCancellation() {
         positionBook.apply(event(1L, BUY_ACTION, 100L));
         positionBook.apply(cancellation(1L));
@@ -132,6 +129,7 @@ class InMemoryPositionBookTest {
         assertPositionQuantity(0L);
     }
 
+    // Duplicate IDs and other rejections
     @ParameterizedTest
     @ValueSource(strings = {BUY_ACTION, SELL_ACTION})
     void shouldRejectDuplicateTradeIdWithoutChangingPosition(final String action) {
@@ -205,6 +203,18 @@ class InMemoryPositionBookTest {
     }
 
     @Test
+    void shouldRejectUnsupportedActionWithoutReservingId() {
+        assertRejected(event(1L, "PURCHASE", 100L), "INVALID_ACTION");
+
+        assertThat(positionBook.findPosition(ACCOUNT_ID, SECURITY_ID)).isEmpty();
+
+        positionBook.apply(event(1L, BUY_ACTION, 100L));
+
+        assertPositionQuantity(100L);
+    }
+
+    // Negative-position policy
+    @Test
     void shouldRejectSellThatWouldCreateNegativePosition() {
         positionBook.apply(event(1L, BUY_ACTION, 50L));
 
@@ -270,6 +280,7 @@ class InMemoryPositionBookTest {
         assertPositionQuantity(-80L);
     }
 
+    // Overflow
     @Test
     void shouldRejectBuyOverflowWithoutChangingPositionOrReservingId() {
         positionBook.apply(event(1L, BUY_ACTION, Long.MAX_VALUE));
@@ -345,15 +356,10 @@ class InMemoryPositionBookTest {
         assertPositionQuantity(Long.MIN_VALUE);
     }
 
+    // Position retrieval
     @Test
-    void shouldRejectUnsupportedActionWithoutReservingId() {
-        assertRejected(event(1L, "PURCHASE", 100L), "INVALID_ACTION");
-
+    void shouldReturnEmptyWhenPositionDoesNotExist() {
         assertThat(positionBook.findPosition(ACCOUNT_ID, SECURITY_ID)).isEmpty();
-
-        positionBook.apply(event(1L, BUY_ACTION, 100L));
-
-        assertPositionQuantity(100L);
     }
 
     @Test
@@ -368,6 +374,7 @@ class InMemoryPositionBookTest {
         assertPositionQuantity(150L);
     }
 
+    // Concurrency
     @Test
     void shouldApplyConcurrentTradesWithoutLosingUpdates() throws Exception {
         final List<Callable<Boolean>> tasks = new ArrayList<>();

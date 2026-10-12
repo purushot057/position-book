@@ -1,5 +1,18 @@
 package uk.co.jpmc.services.trading.positionbook.service;
 
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.ACCOUNT_ID_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.ACTION_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.EVENT_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.EVENT_ID_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.INVALID_ACCOUNT_ID_CODE;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.INVALID_ACTION_CODE;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.INVALID_EVENT_CODE;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.INVALID_EVENT_ID_CODE;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.INVALID_QUANTITY_CODE;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.INVALID_SECURITY_ID_CODE;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.QUANTITY_FIELD;
+import static uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants.SECURITY_ID_FIELD;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.util.ArrayList;
@@ -16,7 +29,6 @@ import uk.co.jpmc.services.trading.positionbook.exception.PositionNotFoundExcept
 import uk.co.jpmc.services.trading.positionbook.model.Position;
 import uk.co.jpmc.services.trading.positionbook.model.TradeEvent;
 import uk.co.jpmc.services.trading.positionbook.persistence.InMemoryPositionBook;
-import uk.co.jpmc.services.trading.positionbook.util.PositionBookConstants;
 import uk.co.jpmc.services.trading.positionbook.web.dto.EventValidationError;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeBatchResponse;
 import uk.co.jpmc.services.trading.positionbook.web.dto.TradeEventRequest;
@@ -32,6 +44,7 @@ public class TradeEventService {
     private static final String EMPTY_BATCH_MESSAGE = "At least one trade event is required";
     private static final String POSITION_NOT_FOUND_MESSAGE =
             "No position exists for the specified account and security";
+    private static final String TRADE_EVENT_NULL_MESSAGE = "Trade event must not be null";
     private static final String BATCH_LIMIT_EXCEEDED_MESSAGE_FORMAT =
             "A request must contain no more than %d events";
 
@@ -85,12 +98,8 @@ public class TradeEventService {
                                 errors));
 
                 log.atWarn()
-                        .addKeyValue(
-                                PositionBookConstants.ACCOUNT_ID_FIELD,
-                                event == null ? null : event.accountId())
-                        .addKeyValue(
-                                PositionBookConstants.SECURITY_ID_FIELD,
-                                event == null ? null : event.securityId())
+                        .addKeyValue(ACCOUNT_ID_FIELD, event == null ? null : event.accountId())
+                        .addKeyValue(SECURITY_ID_FIELD, event == null ? null : event.securityId())
                         .log(
                                 "Trade event rejected: index={}, eventId={}, errorCount={}",
                                 index,
@@ -130,8 +139,8 @@ public class TradeEventService {
                                                 exception.getMessage()))));
 
                 log.atWarn()
-                        .addKeyValue(PositionBookConstants.ACCOUNT_ID_FIELD, event.accountId())
-                        .addKeyValue(PositionBookConstants.SECURITY_ID_FIELD, event.securityId())
+                        .addKeyValue(ACCOUNT_ID_FIELD, event.accountId())
+                        .addKeyValue(SECURITY_ID_FIELD, event.securityId())
                         .log(
                                 "Trade event rejected: index={}, eventId={}, code={}, reason={}",
                                 index,
@@ -163,7 +172,7 @@ public class TradeEventService {
         if (event == null) {
             return List.of(
                     new EventValidationError(
-                            "event", "INVALID_EVENT", "Trade event must not be null"));
+                            EVENT_FIELD, INVALID_EVENT_CODE, TRADE_EVENT_NULL_MESSAGE));
         }
 
         return validator.validate(event).stream()
@@ -181,12 +190,12 @@ public class TradeEventService {
 
         final String code =
                 switch (field) {
-                    case PositionBookConstants.ACCOUNT_ID_FIELD -> "INVALID_ACCOUNT_ID";
-                    case PositionBookConstants.SECURITY_ID_FIELD -> "INVALID_SECURITY_ID";
-                    case "eventId" -> "INVALID_EVENT_ID";
-                    case "action" -> PositionBookConstants.INVALID_ACTION_CODE;
-                    case "quantity" -> "INVALID_QUANTITY";
-                    default -> "INVALID_EVENT";
+                    case ACCOUNT_ID_FIELD -> INVALID_ACCOUNT_ID_CODE;
+                    case SECURITY_ID_FIELD -> INVALID_SECURITY_ID_CODE;
+                    case EVENT_ID_FIELD -> INVALID_EVENT_ID_CODE;
+                    case ACTION_FIELD -> INVALID_ACTION_CODE;
+                    case QUANTITY_FIELD -> INVALID_QUANTITY_CODE;
+                    default -> INVALID_EVENT_CODE;
                 };
 
         return new EventValidationError(field, code, violation.getMessage());

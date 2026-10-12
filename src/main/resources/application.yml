@@ -12,7 +12,7 @@ logging:
     format:
       console: ecs
   level:
-    uk.co.jpmc.services.positionbook: DEBUG
+    uk.co.jpmc.services.trading.positionbook: DEBUG
 
 
 position-book:

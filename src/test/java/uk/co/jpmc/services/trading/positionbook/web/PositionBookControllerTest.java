@@ -495,6 +495,40 @@ class PositionBookControllerTest {
                 .andExpect(header().string(RequestIdFilter.HEADER_NAME, REQUEST_ID));
     }
 
+    @ParameterizedTest(name = "{index}: invalid {0}")
+    @MethodSource("invalidPositionQueryParameters")
+    void shouldGetPositionRejectInvalidQueryParameter(
+            final String parameter, final String invalidValue) throws Exception {
+
+        final String accountId = ACCOUNT_ID_FIELD.equals(parameter) ? invalidValue : ACCOUNT_ID;
+
+        final String securityId = SECURITY_ID_FIELD.equals(parameter) ? invalidValue : SECURITY_ID;
+
+        mockMvc.perform(
+                        get(RETRIEVE_POSITION_URI)
+                                .header(RequestIdFilter.HEADER_NAME, REQUEST_ID)
+                                .param(ACCOUNT_ID_FIELD, accountId)
+                                .param(SECURITY_ID_FIELD, securityId)
+                                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath(CODE_JSON_PATH).value("INVALID_REQUEST_PARAMETER"))
+                .andExpect(jsonPath("$.id").value(REQUEST_ID))
+                .andExpect(jsonPath("$.message").value("Query parameters contain invalid values"))
+                .andExpect(header().string(RequestIdFilter.HEADER_NAME, REQUEST_ID));
+    }
+
+    private static Stream<Arguments> invalidPositionQueryParameters() {
+        return Stream.of(
+                Arguments.of(ACCOUNT_ID_FIELD, ""),
+                Arguments.of(ACCOUNT_ID_FIELD, "   "),
+                Arguments.of(ACCOUNT_ID_FIELD, "ACC@1"),
+                Arguments.of(ACCOUNT_ID_FIELD, "A".repeat(65)),
+                Arguments.of(SECURITY_ID_FIELD, ""),
+                Arguments.of(SECURITY_ID_FIELD, "   "),
+                Arguments.of(SECURITY_ID_FIELD, "SEC@1"),
+                Arguments.of(SECURITY_ID_FIELD, "S".repeat(129)));
+    }
+
     @Test
     void shouldGetPositionReturnNotFoundWhenPositionDoesNotExist() throws Exception {
         retrievePosition()

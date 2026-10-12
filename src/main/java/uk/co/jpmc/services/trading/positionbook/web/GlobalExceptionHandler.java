@@ -12,6 +12,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import uk.co.jpmc.services.trading.positionbook.exception.BatchLimitExceededException;
@@ -64,6 +65,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         } else if (exception instanceof MethodArgumentTypeMismatchException mismatch) {
             code = INVALID_REQUEST_PARAMETER_CODE;
             message = INVALID_REQUEST_PARAMETER_MESSAGE.formatted(mismatch.getName());
+        } else if (exception instanceof HandlerMethodValidationException) {
+            code = INVALID_REQUEST_PARAMETER_CODE;
+            message = "Query parameters contain invalid values";
         } else {
             final HttpStatus httpStatus = HttpStatus.resolve(status.value());
             code = httpStatus != null ? httpStatus.name() : REQUEST_FAILED_CODE;

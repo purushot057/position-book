@@ -80,20 +80,20 @@ class TradeEventServiceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("nullAndEmptyBatches")
-    void shouldRejectNullOrEmptyBatchBeforeValidation(final List<TradeEventRequest> events) {
-        assertThatThrownBy(() -> service.processTradeEvents(events))
-                .isInstanceOf(EmptyBatchException.class);
-
-        verifyNoInteractions(validator, positionBook);
-    }
-
-    @ParameterizedTest
     @ValueSource(ints = {0, -1, Integer.MIN_VALUE})
     void shouldRejectNonPositiveBatchLimit(final int limit) {
         assertThatThrownBy(() -> new TradeEventService(validator, limit, positionBook))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Maximum events per request must be positive");
+
+        verifyNoInteractions(validator, positionBook);
+    }
+
+    @ParameterizedTest
+    @MethodSource("nullAndEmptyBatches")
+    void shouldRejectNullOrEmptyBatchBeforeValidation(final List<TradeEventRequest> events) {
+        assertThatThrownBy(() -> service.processTradeEvents(events))
+                .isInstanceOf(EmptyBatchException.class);
 
         verifyNoInteractions(validator, positionBook);
     }
@@ -145,6 +145,28 @@ class TradeEventServiceTest {
         verifyNoMoreInteractions(validator, positionBook);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {BUY_ACTION, "SELL", "CANCEL"})
+    void shouldMapValidatedRequestAndApplyEvent(final String action) {
+        final TradeEventRequest event = validRequest(1L, action);
+        when(validator.validate(event)).thenReturn(Set.of());
+
+        final TradeBatchResponse response = service.processTradeEvents(List.of(event));
+
+        assertThat(response.processed()).isEqualTo(1);
+        assertThat(response.rejected()).isZero();
+        assertThat(response.results())
+                .containsExactly(
+                        new TradeEventResult(0, 1L, TradeEventStatus.PROCESSED, List.of()));
+
+        final var ordered = inOrder(validator, positionBook);
+        ordered.verify(validator).validate(event);
+        ordered.verify(positionBook)
+                .apply(new TradeEvent(1L, action, ACCOUNT_ID, SECURITY_ID, 100L));
+
+        verifyNoMoreInteractions(validator, positionBook);
+    }
+
     @ParameterizedTest(name = "{index}: {0}, {1}, {2}")
     @MethodSource("batchCombinations")
     void shouldHandleEveryCombinationOfValidInvalidAndNullEvents(
@@ -177,7 +199,7 @@ class TradeEventServiceTest {
             final TradeEventRequest event =
                     state == EventState.VALID
                             ? validRequest(eventId, BUY_ACTION)
-                            : request(eventId);
+                            : requestWithOnlyEventId(eventId);
 
             events.add(event);
 
@@ -230,7 +252,7 @@ class TradeEventServiceTest {
     @MethodSource("validationErrorCodes")
     void shouldMapViolationToFieldCodeAndMessage(
             final String field, final String expectedCode, final String message) {
-        final TradeEventRequest event = request(1L);
+        final TradeEventRequest event = requestWithOnlyEventId(1L);
 
         final Set<ConstraintViolation<TradeEventRequest>> violations =
                 Set.of(violation(field, message));
@@ -254,7 +276,7 @@ class TradeEventServiceTest {
 
     @Test
     void shouldReturnAllViolationsSortedByFieldThenMessage() {
-        final TradeEventRequest event = request(1L);
+        final TradeEventRequest event = requestWithOnlyEventId(1L);
 
         final Set<ConstraintViolation<TradeEventRequest>> violations =
                 Set.of(
@@ -288,39 +310,6 @@ class TradeEventServiceTest {
                                 QUANTITY_NOT_POSITIVE_MESSAGE));
 
         verifyNoInteractions(positionBook);
-    }
-
-    @Test
-    void shouldReturnUnmodifiableResults() {
-        final TradeEventRequest event = validRequest(1L, BUY_ACTION);
-        when(validator.validate(event)).thenReturn(Set.of());
-
-        final TradeBatchResponse response = service.processTradeEvents(List.of(event));
-
-        assertThatThrownBy(() -> response.results().clear())
-                .isInstanceOf(UnsupportedOperationException.class);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {BUY_ACTION, "SELL", "CANCEL"})
-    void shouldMapValidatedRequestAndApplyEvent(final String action) {
-        final TradeEventRequest event = validRequest(1L, action);
-        when(validator.validate(event)).thenReturn(Set.of());
-
-        final TradeBatchResponse response = service.processTradeEvents(List.of(event));
-
-        assertThat(response.processed()).isEqualTo(1);
-        assertThat(response.rejected()).isZero();
-        assertThat(response.results())
-                .containsExactly(
-                        new TradeEventResult(0, 1L, TradeEventStatus.PROCESSED, List.of()));
-
-        final var ordered = inOrder(validator, positionBook);
-        ordered.verify(validator).validate(event);
-        ordered.verify(positionBook)
-                .apply(new TradeEvent(1L, action, ACCOUNT_ID, SECURITY_ID, 100L));
-
-        verifyNoMoreInteractions(validator, positionBook);
     }
 
     @ParameterizedTest
@@ -405,6 +394,55 @@ class TradeEventServiceTest {
         verifyNoMoreInteractions(validator, positionBook);
     }
 
+    @Test
+    void shouldStopBatchWhenUnexpectedFailureOccursAfterSuccessfulEvent() {
+        final TradeEventRequest first = validRequest(1L, BUY_ACTION);
+        final TradeEventRequest second = validRequest(2L, BUY_ACTION);
+        final TradeEventRequest third = validRequest(3L, BUY_ACTION);
+
+        when(validator.validate(first)).thenReturn(Set.of());
+        when(validator.validate(second)).thenReturn(Set.of());
+
+        final TradeEvent firstTrade = new TradeEvent(1L, BUY_ACTION, "ACC1", "SEC1", 100L);
+        final TradeEvent secondTrade = new TradeEvent(2L, BUY_ACTION, "ACC1", "SEC1", 100L);
+
+        final IllegalStateException failure =
+                new IllegalStateException("Unexpected processing failure");
+
+        doAnswer(
+                        invocation -> {
+                            final TradeEvent trade = invocation.getArgument(0);
+                            if (secondTrade.equals(trade)) {
+                                throw failure;
+                            }
+                            return null;
+                        })
+                .when(positionBook)
+                .apply(any(TradeEvent.class));
+
+        assertThatThrownBy(() -> service.processTradeEvents(List.of(first, second, third)))
+                .isSameAs(failure);
+
+        final var ordered = inOrder(validator, positionBook);
+        ordered.verify(validator).validate(first);
+        ordered.verify(positionBook).apply(firstTrade);
+        ordered.verify(validator).validate(second);
+        ordered.verify(positionBook).apply(secondTrade);
+
+        verifyNoMoreInteractions(validator, positionBook);
+    }
+
+    @Test
+    void shouldReturnUnmodifiableResults() {
+        final TradeEventRequest event = validRequest(1L, BUY_ACTION);
+        when(validator.validate(event)).thenReturn(Set.of());
+
+        final TradeBatchResponse response = service.processTradeEvents(List.of(event));
+
+        assertThatThrownBy(() -> response.results().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
     @ParameterizedTest
     @ValueSource(longs = {0L, 150L})
     void shouldMapStoredPositionToResponse(final long quantity) {
@@ -479,7 +517,7 @@ class TradeEventServiceTest {
         return new TradeEventRequest(eventId, action, ACCOUNT_ID, SECURITY_ID, 100L);
     }
 
-    private static TradeEventRequest request(final Long eventId) {
+    private static TradeEventRequest requestWithOnlyEventId(final Long eventId) {
         return new TradeEventRequest(eventId, null, null, null, null);
     }
 
