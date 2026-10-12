@@ -111,9 +111,10 @@ public class PositionBookController {
     @ApiResponse(
             responseCode = "500",
             description = "Unexpected server error",
-            content = @Content(
-                    mediaType = "application/json",
-                    schema = @Schema(implementation = ApiErrorResponse.class)))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiErrorResponse.class)))
     @GetMapping(POSITIONS_PATH)
     public TradePositionResponse getPosition(
             @RequestParam(ACCOUNT_ID_FIELD) @ValidAccountId String accountId,
